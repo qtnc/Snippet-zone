@@ -1,0 +1,829 @@
+package quentinc.midiedit;
+import java.util.regex.*;
+import java.util.*;
+import javax.sound.midi.*;
+
+public class MidiTextCompiler implements Text2SequenceCompiler {
+private static class FixechoData {
+public boolean on = false;
+public int ch = -1, delay = -1, vol = -1, oct = -1, count = -1;
+}
+private static class CompiledSequence extends Sequence {
+private Patch[] patchs;
+public CompiledSequence (float f, int n) throws InvalidMidiDataException { super(f,n); }
+public CompiledSequence (float f, int n, Patch[] p) throws InvalidMidiDataException {
+this(f,n);
+setPatchList(p);
+}
+public void setPatchList (Patch[] p) { patchs=p; }
+public Patch[] getPatchList () { return patchs; }
+public void setResolution (int n) { resolution = n; }
+}
+
+public static final int
+CTRL_BANK_MSB = 0,
+CTRL_MODULATION = 1,
+CTRL_PORTA_TIME = 5,
+CTRL_DATA_MSB = 6,
+CTRL_VOLUME = 7,
+CTRL_BALANCE = 8,
+CTRL_PANNING = 10,
+CTRL_EXPRESSION = 11,
+CTRL_BANK_LSB = 32,
+CTRL_DATA_LSB = 38,
+CTRL_SUSTAIN = 64,
+CTRL_PORTA = 65,
+CTRL_SOSTENUTO = 66,
+CTRL_SOFT = 67,
+CTRL_TIMBRE = 71,
+CTRL_RELEASE = 72,
+CTRL_ATTACK = 73,
+CTRL_BRIGHTNESS = 74,
+CTRL_DECAY = 75,
+CTRL_VIBRA_RATE = 76,
+CTRL_VIBRA_DEPTH = 77,
+CTRL_VIBRA_DELAY = 78,
+CTRL_PORTA_NOTE = 84,
+CTRL_REVERB = 91,
+CTRL_CHORUS = 93,
+CTRL_NRPN_LSB = 98,
+CTRL_NRPN_MSB = 99,
+CTRL_RPN_LSB = 100,
+CTRL_RPN_MSB = 101,
+CTRL_ALL_SOUNDS_OFF = 120,
+CTRL_RESET = 121,
+CTRL_ALL_NOTES_OFF = 123,
+CTRL_MONO_MODE = 126,
+CTRL_POLY_MODE = 127,
+META_TEXT = 1,
+META_COPYRIGHT = 2,
+META_TITLE = 3,
+META_LYRIC = 5,
+META_MARKER = 6,
+META_CUE_POINT = 7,
+META_COMPOSER = 8,
+META_GENRE = 9,
+META_COMPILER_TEXT = 11,
+META_AUTHOR = 12,
+META_INTERPRETER = 13,
+META_DATE = 14,
+META_TEMPO = 81,
+META_TIME_SIGNATURE = 88,
+META_KEY_SIGNATURE = 89;
+
+private static final Map<String,Integer> NOTES;
+static {
+Map<String,Integer> map = new HashMap<String,Integer>(100);
+map.put("Cb", 47);
+map.put("C", 48);
+map.put("C#", 49);
+map.put("Db", 49);
+map.put("D", 50);
+map.put("D#", 51);
+map.put("Eb", 51);
+map.put("E", 52);
+map.put("Fb", 52);
+map.put("E#", 53);
+map.put("F", 53);
+map.put("F#", 54);
+map.put("Gb", 54);
+map.put("G", 55);
+map.put("G#", 56);
+map.put("Ab", 56);
+map.put("A", 57);
+map.put("A#", 58);
+map.put("Bb", 58);
+map.put("B", 59);
+map.put("cb", 59);
+map.put("B#", 60);
+map.put("c", 60);
+map.put("c#", 61);
+map.put("db", 61);
+map.put("d", 62);
+map.put("d#", 63);
+map.put("eb", 63);
+map.put("e", 64);
+map.put("fb", 64);
+map.put("e#", 65);
+map.put("f", 65);
+map.put("f#", 66);
+map.put("gb", 66);
+map.put("g", 67);
+map.put("g#", 68);
+map.put("ab", 68);
+map.put("a", 69);
+map.put("a#", 70);
+map.put("bb", 70);
+map.put("b", 71);
+map.put("b#", 72);
+NOTES = map;
+}
+
+
+public static int parseDuration (String s, int r, int m) {
+if (m!=0) r = m;
+if (s.endsWith("*")) { s=s.substring(0, s.length() -1); r = r * 3 / 2; }
+if (s.length()<=0) return r;
+else if (s.equals("/")) return r/2;
+else if (s.matches("^\\d+$")) return Integer.parseInt(s) * r;
+else if (s.matches("^/\\d+$")) return r / Integer.parseInt(s.substring(1));
+else {
+int k = s.indexOf("/");
+if (k>=s.length() -1) return Integer.parseInt(s.substring(0,k)) * r / 2;
+else return Integer.parseInt(s.substring(0,k)) * r / Integer.parseInt(s.substring(k+1));
+}}
+public static int parseNote (String s) {
+Integer k = NOTES.get(s);
+return (k==null? 60 : k);
+}
+public String parseExpression (String str) {
+if (str.matches("^-?\\d+$")) return str;
+else if (str.matches("^\\w+$")) {
+String val = vars.get(str);
+return (val==null? "0" : val);
+}
+
+Matcher m = getRegex("\\(([^\\(\\)]+)\\)").matcher(str);
+while (m.find()) {
+StringBuffer sb = new StringBuffer();
+m.appendReplacement(sb, parseExpression(m.group(1)));
+sb=m.appendTail(sb);
+str = sb.toString();
+m.reset(str);
+}
+
+m = getRegex("[-/\\+\\*%@\\^]").matcher(str);
+int curval = 0, lastIndex = -1; char lastop = '\0';
+while (m.find()) {
+int start = m.start();
+char ch = str.charAt(start);
+int value = Integer.parseInt(parseExpression(str.substring(lastIndex+1, start)));
+curval = parseOperation(curval, value, lastop);
+lastIndex = start;
+lastop = ch;
+}
+//System.err.println("String to parse : " + str.substring(lastIndex+1));
+String str3 = str.substring(lastIndex+1).trim();
+int value = (str3.length()==0? 0 :
+Integer.parseInt(parseExpression(str3)));
+curval = parseOperation(curval, value, lastop);
+return String.valueOf(curval);
+}
+public int parseOperation (int a, int b, char c) {
+switch (c) {
+case '\0' : return b;
+case '+' : return a+b;
+case '-' : return a-b;
+case '*' : return a*b;
+case '/' : return a/b;
+case '^' : return (int)Math.pow(a,b);
+case '%' : return a%b;
+case '>' : return (a>b? 1 : 0);
+case '<' : return (a<b? 1 : 0);
+case '@' : return b/a;
+default : return a;
+}}
+
+
+List<MidiEvent> evs = new ArrayList<MidiEvent>();
+List<Patch> patchlist = new ArrayList<Patch>();
+Stack<int[]> repeats = new Stack<int[]>();
+boolean repeatMask = false, repeatMask2 = false;
+int resolution = 480;
+boolean[] useKeyall = new boolean[16];
+int lastMatch = 0;
+int ch = 0, keyall = 0, bpm = 120;
+int[] vol=new int[16], tick=new int[16], maxnotelength=new int[16], oct=new int[16], multipliers = new int[16], programs = new int[16];
+String[] onnoteon = new String[16], onnoteoff = new String[16];
+int kCmdMode = CTRL_SUSTAIN;
+FixechoData[] fixecho = new FixechoData[16];
+Map<String,String> vars = new HashMap<String,String>();
+boolean includeSource = true;
+
+public void setIncludeSource (boolean b) { includeSource=b; }
+public Sequence compile (String originalText, int... ptrs) {
+long time = System.currentTimeMillis();
+
+String text = originalText;
+try {
+evs.clear();
+for (int i=0; i < 16; i++) evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, i, CTRL_RESET, 127), 0));
+
+patchlist.clear();
+repeats.clear();
+vars.clear();
+repeatMask = false; repeatMask2 = false;
+resolution = 480;
+lastMatch = 0;
+ch = 0; keyall = 0;
+vol=new int[16]; tick=new int[16];  maxnotelength=new int[16];  oct=new int[16]; multipliers = new int[16]; programs = new int[16];
+fixecho = new FixechoData[16];
+useKeyall = new boolean[16];
+for (int i=0; i < 16; i++) {
+onnoteon[i] = onnoteoff[i] = null;
+maxnotelength[i]=0;
+tick[i]=0;
+vol[i]=127;
+oct[i]=0;
+fixecho[i]=new FixechoData();
+useKeyall[i] = (i!=9);
+}
+
+Matcher m; StringBuffer sb = new StringBuffer();
+m = getRegex("\"(.*?)\"").matcher(text);
+while (m.find()) {
+String repl = m.group(1).replace(' ', '\u00A0');
+m.appendReplacement(sb, repl);
+}
+sb=m.appendTail(sb);
+text = sb.toString();
+
+// delete comments
+m = getRegex("/\\*(.*?)\\*/", Pattern.DOTALL).matcher(text);
+sb = new StringBuffer();
+while (m.find()) {
+int n = m.start();
+int l = m.group(0).length();
+for (int i=0; i < ptrs.length; i+=4) {
+if (ptrs[i]>n)  ptrs[i]-=l;
+}
+m.appendReplacement(sb, "");
+}
+sb=m.appendTail(sb);
+text = sb.toString();
+m = getRegex("//.*").matcher(text);
+sb = new StringBuffer();
+while (m.find()) {
+int n = m.start();
+int l = m.group(0).length();
+for (int i=0; i < ptrs.length; i+=4) {
+if (ptrs[i]>n)  ptrs[i]-=l;
+}
+m.appendReplacement(sb, "");
+}
+sb=m.appendTail(sb);
+text = sb.toString();
+
+
+long ti = System.currentTimeMillis();
+//System.out.println("compiling phase 1 : " + (ti-time)  + " ms");
+time=ti;
+
+for (int i=0; i < ptrs.length; i+=4) ptrs[i] = -ptrs[i];
+
+Matcher genm = getRegex("\\S+").matcher(text);
+while (genm.find()) {
+String str = genm.group(0).replace('\u00A0', ' ');
+
+int curMatch = genm.start(0);
+for (int i=0; i < ptrs.length; i+=4) {
+if (ptrs[i]<0 && -ptrs[i]>lastMatch && -ptrs[i]<=curMatch) {
+ptrs[i]=tick[ch];
+ptrs[i+1] = ch;
+ptrs[i+2] = programs[ch];
+ptrs[i+3] = bpm;
+}}
+lastMatch=curMatch;
+
+parseCommand(str, genm);
+}
+
+ti = System.currentTimeMillis();
+//System.out.println("compiling phase 2 : " + (ti-time)  + " ms");
+time=ti;
+
+evs.add(new MidiEvent(meta(META_TEXT, "Generated by MidiText v 1.0 bêta 1, see http://quentinc.net/ for more details"), 0));
+if (includeSource) evs.add(new MidiEvent(meta(META_COMPILER_TEXT, originalText), 0));
+
+Collections.sort(evs, new MidiEventComparator());
+CompiledSequence s = new CompiledSequence(Sequence.PPQ, resolution, patchlist.toArray(new Patch[0]));
+Track t = s.createTrack();
+for (MidiEvent e : evs) t.add(e);
+
+ti = System.currentTimeMillis();
+//System.out.println("compiling phase 3 : " + (ti-time)  + " ms");
+time=ti;
+
+return s;
+} catch (Exception e) { e.printStackTrace(); }
+return null;
+}
+private void parseCommand (String str, Matcher genm) throws Exception {
+try {
+Matcher m;
+StringBuffer sb = null;
+
+m = getRegex("&(\\-?\\d*)([abcdefgABCDEFG][b#]?)").matcher(str);
+while (m.find()) {
+int k = parseNote(m.group(2)), o = 0;
+if (m.group(1).length()>0) o = Integer.parseInt(m.group(1));
+k += 12*o;
+k += keyall;
+if (sb==null) sb = new StringBuffer();
+m.appendReplacement(sb, String.valueOf(k));
+}
+if (sb!=null) {
+sb=m.appendTail(sb);
+str=sb.toString();
+sb=null;
+}
+m = getRegex("%(\\w+)%").matcher(str);
+while (m.find()) {
+String val = vars.get(m.group(1));
+if (val==null) val = "0";
+if (sb==null) sb = new StringBuffer();
+m.appendReplacement(sb, val);
+}
+if (sb!=null) {
+sb=m.appendTail(sb);
+str = sb.toString();
+sb=null;
+}
+
+
+if (str.equals("(") || str.equals("|:")) {
+repeatMask2 = repeatMask = false;
+int pos = genm.start();
+repeats.push(new int[]{-1,pos});
+}
+
+if (str.equals("|") || str.equals("|1") || str.startsWith(":|")) {
+if (repeats.empty()) return;
+boolean last = repeats.peek()[0]==1;
+repeatMask2=!repeatMask2;
+
+/*if (last && repeatMask2) repeatMask = true;
+else if (last && !repeatMask2) repeatMask = false;
+else if (!last && repeatMask2) repeatMask = false;
+else if (!last && !repeatMask2) repeatMask = true;*/
+repeatMask = last==repeatMask2;
+return;
+}
+
+if (str.equals("||")) str = ")2";
+m = getRegex("^\\)(\\d+)$").matcher(str);
+if (m.find()) {
+if (repeats.empty()) return;
+repeatMask2 = repeatMask = false;
+if (repeats.peek()[0] == -1) repeats.peek()[0] =  Integer.parseInt(m.group(1));
+if ((--repeats.peek()[0]) <= 0) repeats.pop();
+else {
+genm.find(repeats.peek()[1]);
+return;
+}}
+
+
+if (repeatMask) return;
+
+
+m = getRegex("^(-?\\d*)([CDEFGABcdefgab][#b]?)(\\d*|/\\d*|\\d+/\\d*)(\\*?)$").matcher(str);
+while (m.find()) {
+String octS = m.group(1), noteS = m.group(2), durS = m.group(3), durStartS = m.group(4);
+int note = parseNote(noteS) + 12*oct[ch] + (useKeyall[ch]? keyall : 0);
+if (octS.length()>0) note += 12*Integer.parseInt(octS);
+int dur = parseDuration(durS, resolution, multipliers[ch]);
+if (durStartS.length()!=0) dur = dur * 3/2;
+int noteDur = dur;
+if (maxnotelength[ch]>0) noteDur=Math.min(noteDur, maxnotelength[ch]);
+
+if (note>=0 && note<=127) {
+evs.add(new MidiEvent(msg(ShortMessage.NOTE_ON, ch, note, vol[ch]) ,tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.NOTE_OFF, ch, note, vol[ch]) ,tick[ch] + noteDur));
+}
+
+if (fixecho[ch].on) {
+int delay = fixecho[ch].delay;
+int ch2 = fixecho[ch].ch;
+int noteDur2 = noteDur;
+if (maxnotelength[ch2]>0) noteDur2 = Math.min(noteDur2, maxnotelength[ch2]);
+int vol2 = vol[ch];
+int dec = fixecho[ch].oct ; //+ oct[ch2] - oct[ch];
+int note2 = note + dec;
+for (int zz=1; zz<=fixecho[ch].count; zz++) {
+vol2 = vol2 * fixecho[ch].vol / 100;
+if (note2>=0 && note2<=127) {
+evs.add(new MidiEvent(msg(ShortMessage.NOTE_ON, ch2, note2, vol2) ,zz*delay+tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.NOTE_OFF, ch2, note2, vol2) ,zz*delay+tick[ch] + noteDur2));
+}}}
+
+if (onnoteon[ch]!=null && onnoteon[ch].length()>0) {
+vars.put("curnote", String.valueOf(note));
+for (String z : onnoteon[ch].split(" ")) parseCommand(z, null);
+}
+
+tick[ch] += dur;
+
+if (onnoteoff[ch]!=null && onnoteoff[ch].length()>0) {
+vars.put("curnote", String.valueOf(note));
+for (String z : onnoteoff[ch].split(" ")) parseCommand(z, null);
+}
+
+return;
+}
+
+m = getRegex("^([sr]):?(\\d*|/\\d+|\\d+/\\d+)(\\*?)$").matcher(str);
+if (m.find()) {
+int d = parseDuration(m.group(2), resolution, multipliers[ch]);
+if (m.group(3).length()>0) d = d * 3 / 2;
+if (m.group(1).equals("r"))d = -d;
+tick[ch] += d;
+return;
+}
+
+m = getRegex("^[pi]:?(\\d+)$").matcher(str);
+if (m.find()) {
+int p = Integer.parseInt(m.group(1));
+programs[ch] = p;
+int bankMSB = (p>>14)&0x7F, bankLSB = (p>>7)&0x7F, program = p&0x7F, patchBank = (p>>7)&0x3FFF;
+boolean patchPerc = (ch==9||patchBank==16256);
+if (patchPerc && patchBank==16256) patchBank=0;
+useKeyall[ch] = !patchPerc;
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_BANK_MSB, bankMSB), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_BANK_LSB, bankLSB), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.PROGRAM_CHANGE, ch, program, 0), tick[ch]));
+patchlist.add(new com.sun.media.sound.ModelPatch(patchBank, program, patchPerc));
+return;
+}
+
+m = getRegex("^[pi]:?(\\d+),(\\d+)$").matcher(str);
+if (m.find()) {
+int b = Integer.parseInt(m.group(1)), p = Integer.parseInt(m.group(2)), patchBank = b;
+int bankMSB = (b>>7)&0x7F, bankLSB = b&0x7F, program = p&0x7F;
+boolean patchPerc = (ch==9||patchBank==16256);
+if (patchBank==16256) patchBank=0;
+useKeyall[ch] = !patchPerc;
+
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_BANK_MSB, bankMSB), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_BANK_LSB, bankLSB), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.PROGRAM_CHANGE, ch, program, 0), tick[ch]));
+patchlist.add(new com.sun.media.sound.ModelPatch(patchBank, program, patchPerc));
+return;
+}
+
+m = getRegex("^v:?(\\d+)$").matcher(str);
+if (m.find()) {
+vol[ch] = Integer.parseInt(m.group(1));
+return;
+}
+
+m = getRegex("o(ct)?:?(-?\\d+)$").matcher(str);
+if (m.find()) {
+oct[ch] = Integer.parseInt(m.group(2));
+return;
+}
+
+m = getRegex("^vc:?(\\d+)$").matcher(str);
+if (m.find()) {
+int n = Integer.parseInt(m.group(1));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_VOLUME, n), tick[ch]));
+return;
+}
+
+m = getRegex("^x:?(\\d+)$").matcher(str);
+if (m.find()) {
+int n = Integer.parseInt(m.group(1));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_EXPRESSION, n), tick[ch]));
+return;
+}
+
+m = getRegex("^l:?(\\d+)$").matcher(str);
+if (m.find()) {
+int n = Integer.parseInt(m.group(1));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_PANNING, n), tick[ch]));
+return;
+}
+
+m = getRegex("^k:?(on|off|sustain|sostenuto|soft)$").matcher(str);
+if (m.find()) {
+String s1 = m.group(1);
+if (s1.equals("sustain")) kCmdMode = CTRL_SUSTAIN;
+else if (s1.equals("sostenuto")) kCmdMode = CTRL_SOSTENUTO;
+else if (s1.equals("soft")) kCmdMode = CTRL_SOFT;
+else evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, kCmdMode, s1.equals("on")? 127:0), tick[ch]));
+return;
+}
+
+m = getRegex("^ctrl:?(\\d+)[,;](\\d+)$").matcher(str);
+if (m.find()) {
+int ctrl = Integer.parseInt(m.group(1)), value = Integer.parseInt(m.group(2));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, ctrl, value), tick[ch]));
+return;
+}
+
+m = getRegex("^mult:?(\\d*|\\d*/\\d*)$").matcher(str);
+if (m.find()) {
+multipliers[ch] = parseDuration(m.group(1), resolution, 0);
+}
+
+
+m = getRegex("^chp:?(\\d+)$").matcher(str);
+if (m.find()) {
+int n = Integer.parseInt(m.group(1));
+evs.add(new MidiEvent(msg(ShortMessage.CHANNEL_PRESSURE, ch, n, 0), tick[ch]));
+return;
+}
+
+m = getRegex("^kp:?(\\d+),(\\d+)$").matcher(str);
+if (m.find()) {
+int key = Integer.parseInt(m.group(1));
+int n = Integer.parseInt(m.group(2));
+evs.add(new MidiEvent(msg(ShortMessage.POLY_PRESSURE, ch, key, n), tick[ch]));
+return;
+}
+
+m = getRegex("^nrpn:?(\\d+),(\\d+),(\\d+),(\\d+)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_NRPN_MSB, Integer.parseInt(m.group(1))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_NRPN_LSB, Integer.parseInt(m.group(2))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_DATA_LSB, Integer.parseInt(m.group(4))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_DATA_MSB, Integer.parseInt(m.group(3))), tick[ch]));
+return;
+}
+
+m = getRegex("^rpn:?(\\d+),(\\d+),(\\d+),(\\d+)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_RPN_MSB, Integer.parseInt(m.group(1))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_RPN_LSB, Integer.parseInt(m.group(2))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_DATA_LSB, Integer.parseInt(m.group(4))), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_DATA_MSB, Integer.parseInt(m.group(3))), tick[ch]));
+return;
+}
+
+m = getRegex("^sustain:?(on|off)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_SUSTAIN, m.group(1).equals("on")? 127:0), tick[ch]));
+return;
+}
+
+m = getRegex("^sostenuto:?(on|off)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_SOSTENUTO, m.group(1).equals("on")? 127:0), tick[ch]));
+return;
+}
+
+m = getRegex("^soft:?(on|off)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_SOFT, m.group(1).equals("on")? 127:0), tick[ch]));
+return;
+}
+
+m = getRegex("^porta:?(on|off)$").matcher(str);
+if (m.find()) {
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_PORTA, m.group(1).equals("on")? 127:0), tick[ch]));
+return;
+}
+
+ m = getRegex("^(hs|h\\.sens):?(\\d+)$").matcher(str); 
+if (m.find()) {
+int n = Integer.parseInt(m.group(2));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_RPN_MSB, 0), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_RPN_LSB, 0), tick[ch]));
+evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, CTRL_DATA_MSB, n), tick[ch]));
+return;
+} 
+
+m = getRegex("^h:?(\\d+)$").matcher(str);
+if (m.find()) {
+int value = Integer.parseInt(m.group(1));
+evs.add(new MidiEvent(msg(ShortMessage.PITCH_BEND, ch, value&0x7F, value>>7), tick[ch]));
+return;
+}
+
+m = getRegex("^maxnotelength:?(off|\\d+|/\\d+|\\d+/\\d+)(\\*?)$").matcher(str);
+if (m.find()) {
+if (m.group(1).equals("off")) maxnotelength[ch]=0;
+else maxnotelength[ch] = parseDuration(m.group(1)+m.group(2), resolution, multipliers[ch]);
+return;
+}
+
+m = getRegex("^onnote(on|off):(.*)$").matcher(str);
+if (m.find()) {
+String s = m.group(1), data = m.group(2);
+if (data.equals("off")) data = null;
+if (s.equals("off")) onnoteoff[ch] = data;
+else onnoteon[ch] = data;
+}
+
+m = getRegex("^fixecho:?(\\d+|/\\d+|\\d+/\\d+)(\\*?)[,;](\\d+)[,;](on|off|\\d+)[,;](\\d+)[,;](-?\\d+)$").matcher(str);
+if (m.find()) {
+//System.out.println("Fixecho found : " +m.group(0));
+int dur = parseDuration(m.group(1)+m.group(2), resolution, multipliers[ch]);
+int vol2 = Integer.parseInt(m.group(3));
+String countS = m.group(4);
+int count = 1;
+if (countS.matches("^\\d+")) count = Integer.parseInt(countS);
+int ch2 = Integer.parseInt(m.group(5));
+String g5 = m.group(6); int oct2 = 0;
+if (g5.startsWith("+")) oct2 = Integer.parseInt(g5.substring(1));
+else oct2 = 12*Integer.parseInt(g5);
+fixecho[ch].on = true;
+fixecho[ch].vol = vol2;
+fixecho[ch].ch = ch2;
+fixecho[ch].oct = oct2;
+fixecho[ch].delay = dur;
+fixecho[ch].count = count;
+return;
+}
+
+if (str.equals("fixecho:off")) {
+fixecho[ch].on = false;
+return;
+}
+
+m = getRegex("^\\[v:?(\\d+)\\]$").matcher(str);
+if (m.find()) {
+ch = Integer.parseInt(m.group(1));
+return;
+}
+
+m = getRegex("^keyall:?(-?\\d+)$").matcher(str);
+if (m.find()) {
+keyall = Integer.parseInt(m.group(1));
+return;
+}
+
+m = getRegex("^tem(po)?:?(\\d+)$").matcher(str);
+if (m.find()) {
+bpm = Integer.parseInt(m.group(2));
+int mpq = 60000000/bpm;
+byte b[] = new byte[3];
+b[0] = (byte)(mpq>>16);
+b[1] = (byte)(mpq>>8);
+b[2] = (byte)(mpq&0xFF);
+evs.add(new MidiEvent(meta(META_TEMPO, b), tick[ch]));
+return;
+}
+
+m = getRegex("^resolution:?(\\d+)$").matcher(str); 
+if (m.find()) {
+resolution = Integer.parseInt(m.group(1));
+return;
+}
+
+if (str.equalsIgnoreCase("do_not_include_source")) { includeSource = false; return; }
+
+m = getRegex("^cr([a-z]):?(.*)$").matcher(str);
+if (m.find()) {
+String t[] = m.group(2).split("[,;]");
+char c = m.group(1).charAt(0);
+int ctrl = -1;
+switch (c) {
+case 'h' : ctrl = -2; break;
+case 'p' : ctrl = -3; break;
+case 'k' : ctrl = -10 -Integer.parseInt(t[0]);
+case 'c' : ctrl = Integer.parseInt(t[0]); break;
+case 'v' : ctrl = CTRL_VOLUME; break;
+case 'x' : ctrl = CTRL_EXPRESSION; break;
+case 'l' : ctrl = CTRL_PANNING; break;
+case 'd' : ctrl = CTRL_DATA_MSB; break;
+default : ctrl = -1; break;
+}
+if (ctrl==-1) return;
+int precision = (c=='h'? 16 : 2);
+int index = (c=='c'||c=='k'? 1:0);
+int start = Integer.parseInt(t[index]), val = start;
+int end = Integer.parseInt(t[index+1]);
+int dur = parseDuration(t[index+2], resolution, multipliers[ch]);
+double dval = start, step = (end - start) * 1.0 / dur;
+
+if (ctrl == -2) evs.add(new MidiEvent(msg(ShortMessage.PITCH_BEND, ch, val&0x7F, (val>>7)&0x7F), tick[ch]));
+else if (ctrl>=0) evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, ctrl, val), tick[ch]));
+else if (ctrl == -3) evs.add(new MidiEvent(msg(ShortMessage.CHANNEL_PRESSURE, ch, val, 0), tick[ch])); 
+else if (ctrl <= -10) evs.add(new MidiEvent(msg(ShortMessage.POLY_PRESSURE, ch, -(ctrl+10), val), tick[ch]));
+
+for (int i=0; i < dur; i++) {
+dval+=step;
+if (Math.abs(dval-val)>=precision) {
+val=(int)dval;
+if (ctrl == -2) evs.add(new MidiEvent(msg(ShortMessage.PITCH_BEND, ch, val&0x7F, val>>7), i+tick[ch]));
+else if (ctrl>=0) evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, ctrl, val), i+tick[ch]));
+else if (ctrl == -3) evs.add(new MidiEvent(msg(ShortMessage.CHANNEL_PRESSURE, ch, val, 0), i+tick[ch])); 
+else if (ctrl <= -10) evs.add(new MidiEvent(msg(ShortMessage.POLY_PRESSURE, ch, -(ctrl+10), val), i+tick[ch]));
+}}
+val=end;
+if (ctrl == -2) evs.add(new MidiEvent(msg(ShortMessage.PITCH_BEND, ch, val&0x7F, val>>7), dur+tick[ch]));
+else if (ctrl>=0) evs.add(new MidiEvent(msg(ShortMessage.CONTROL_CHANGE, ch, ctrl, val), dur+tick[ch]));
+else if (ctrl == -3) evs.add(new MidiEvent(msg(ShortMessage.CHANNEL_PRESSURE, ch, val, 0), dur+tick[ch])); 
+else if (ctrl <= -10) evs.add(new MidiEvent(msg(ShortMessage.POLY_PRESSURE, ch, -(ctrl+10), val), dur+tick[ch]));
+return;
+}
+
+m = getRegex("^(title|copyright|text|lyric|cue|mark|composer|genre|author|interpreter|date):(.*?)$").matcher(str);
+if (m.find()) {
+int n =  -1;
+String s1 = m.group(1);
+if (s1.equals("title")) n = META_TITLE;
+else if (s1.equals("copyright")) n = META_COPYRIGHT;
+else if (s1.equals("composer")) n = META_COMPOSER;
+else if (s1.equals("author")) n = META_AUTHOR;
+else if (s1.equals("interpreter")) n = META_INTERPRETER;
+else if (s1.equals("genre")) n = META_GENRE;
+else if (s1.equals("text")) n = META_TEXT;
+else if (s1.equals("cue")) n = META_CUE_POINT;
+else if (s1.equals("mark")) n = META_MARKER;
+else if (s1.equals("lyric")) n = META_LYRIC;
+else if (s1.equals("date")) n = META_DATE;
+if (n>=0) evs.add(new MidiEvent(meta(n, m.group(2)), tick[ch]));
+return;
+}
+
+m = getRegex("^meta:?(\\d+)[:,;](.*)$").matcher(str);
+if (m.find()) {
+int type = Integer.parseInt(m.group(1));
+String s = m.group(2);
+if (s.matches("^\\d+(,\\d+)*$")) {
+String[] t = s.split(",");
+byte b[] = new byte[t.length];
+for (int i=0; i < t.length; i++) b[i] = (byte)Integer.parseInt(t[i]);
+evs.add(new MidiEvent(meta(type, b), tick[ch]));
+}
+else evs.add(new MidiEvent(meta(type, s), tick[ch]));
+return;
+}
+
+m = getRegex("^sysex:?(.*)$").matcher(str);
+if (m.find()) {
+String[] t = m.group(1).split(",");
+byte b[] = new byte[t.length];
+for (int i=0; i < t.length; i++) b[i] = (byte)Integer.parseInt(t[i]);
+SysexMessage msg = new SysexMessage();
+msg.setMessage(0xF0, b, b.length);
+evs.add(new MidiEvent(msg, tick[ch]));
+return;
+}
+
+m = getRegex("^(\\w+)=(.*?)$").matcher(str);
+if (m.find()) {
+String varname = m.group(1), expr = m.group(2);
+String newval = parseExpression(expr);
+vars.put(varname, newval);
+}
+
+// others commands 
+} catch (InvalidMidiDataException e) {
+e.printStackTrace();
+} catch (Exception e) { e.printStackTrace(); }
+}
+public static MidiMessage msg (int status, int channel, int d1, int d2) throws InvalidMidiDataException {
+ShortMessage m = new ShortMessage();
+if (d1>127) d1=127;
+if (d2>127) d2=127;
+if (d1<0) d1=0;
+if (d2<0) d2=0;
+m.setMessage(status, channel, d1, d2);
+return m;
+}
+public static MidiMessage meta (int type, String str) throws Exception {
+MetaMessage m = new MetaMessage();
+byte[] b = str.getBytes("iso-8859-1");
+m.setMessage(type,b,b.length);
+return m;
+}
+public static MidiMessage meta (int type, byte[] d) throws InvalidMidiDataException {
+MetaMessage m = new MetaMessage();
+m.setMessage(type,d,d.length);
+return m;
+}
+public static MidiMessage meta (int type, int value, int nb) throws InvalidMidiDataException {
+return meta(type, valueToByteArray(value,nb));
+}
+public static byte[] valueToByteArray (int v, int n) {
+byte b[] = new byte[n];
+for (int i=0; i<n; i++) {
+b[i] = (byte)(((v>>((n-i-1)<<3))&0xFF));
+}
+return b;
+}
+
+
+private static Map<String,Pattern> patterns = new HashMap<String,Pattern>();
+public static Pattern getRegex (String pattern) { return getRegex(pattern,0); }
+public static Pattern getRegex (String pattern, int options) {
+String key = (new StringBuffer()).append(pattern).append('§').append(String.valueOf(options)).toString();
+Pattern p = patterns.get(key);
+if (p!=null) return p;
+p = Pattern.compile(pattern,options);
+patterns.put(key,p);
+return p;
+}
+
+}
+class MidiEventComparator implements Comparator<MidiEvent> {
+public int compare (MidiEvent a, MidiEvent b) {
+long a1 = a.getTick(), b1 = b.getTick();
+if (a1<b1) return -1;
+else if (a1>b1) return 1;
+else return 0;
+
+/*
+int a2 = a.getMessage().getStatus(), b2 = b.getMessage().getStatus(), a3 = a2&0xF0, b3 = b2&0xF0;
+if (a3==b3) return 0;
+//if (a3==128) a3=145; if (b3==128) b3=145;
+
+if (a3<b3) return -1;
+else if (a3>b3) return 1;
+else return 0;
+*/
+}
+
+}

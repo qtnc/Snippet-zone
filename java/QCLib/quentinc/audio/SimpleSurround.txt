@@ -1,0 +1,14 @@
+package quentinc.audio;
+public class TestDSP extends DSP {
+
+int pos = 0;
+public int process (Channel src, short[] buf, int start, int end)  {
+for (int i=start; i<end; i+=2) {
+int a = (buf[i] + buf[i+1]) /2;
+buf[i] = (short)a;
+buf[i+1] = (short)(-a);
+}
+return end;
+}
+
+}

@@ -13,3 +13,5 @@
 *.tmp
 *.dat
 out*.txt
+*test*
+*Test*

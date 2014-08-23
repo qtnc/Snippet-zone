@@ -1,0 +1,42 @@
+package quentinc.midiedit;
+import javax.sound.midi.*;
+import java.util.*;
+
+public class SoundbankItem  {
+private Soundbank bank;
+private ArrayList<Patch> patchs = null;
+private boolean exclude = true;
+
+public SoundbankItem (Soundbank s) { setSoundbank(s); }
+public Soundbank getSoundbank () { return bank; }
+public void setSoundbank (Soundbank b) { bank = b; }
+public void setExcludedList (ArrayList<Patch> p) {
+exclude = true;
+patchs=p;
+}
+public void setIncludedList (ArrayList<Patch> p) {
+exclude = false;
+patchs=p;
+}
+public boolean isInList (Patch p) {
+if (patchs==null) return exclude;
+return exclude!=contains(p);
+}
+public Patch[] computeIntersection (Patch patchlist[]) {
+if (patchs==null && !exclude) return new Patch[0];
+ArrayList<Patch> l = new ArrayList<Patch>();
+for (Patch p : patchlist) {
+if (exclude && patchs!=null && contains(p)) continue;
+if (!exclude  && patchs!=null && !contains(p)) continue;
+if (bank.getInstrument(p)!=null) l.add(p);
+}
+return l.toArray(new Patch[0]);
+}
+public boolean contains (Patch p) {
+for (Patch p1 : patchs) {
+if (p1.getBank()==p.getBank() && p1.getProgram()==p.getProgram()) return true;
+}
+return false;
+}
+}
+

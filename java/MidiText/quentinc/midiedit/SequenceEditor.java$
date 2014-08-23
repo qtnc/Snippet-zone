@@ -1,0 +1,17 @@
+package quentinc.midiedit;
+import javax.sound.midi.*;
+
+public interface SequenceEditor {
+public String getOption (String oName);
+public void setOption (String oName, String oValue);
+public Sequence getSequence ();
+public void setSequence (Sequence s);
+public int getTickSelectionStart ();
+public int getTickSelectionEnd();
+public void copy ();
+public void cut ();
+public void paste ();
+public void deleteSelection();
+public void nextVoice ();
+public void prevVoice ();
+}

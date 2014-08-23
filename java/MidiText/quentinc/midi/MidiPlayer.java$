@@ -1,0 +1,50 @@
+package quentinc.midiedit;
+import javax.sound.midi.*;
+import javax.sound.sampled.*;
+import java.io.*;
+import java.util.*;
+import com.sun.media.sound.*;
+
+public class MidiPlayer {
+AudioSynthesizer synth = null;
+SourceDataLine line = null;
+FloatControl volume = null;
+Sequencer seq = null;
+ArrayList<SoundbankItem> banks = new ArrayList<SoundbankItem>();
+
+public SourceDataLine getLine () { return line; }
+public FloatControl getVolumeControl () { return volume; }
+public AudioSynthesizer getSynthesizer () { return synth; }
+public Sequencer getSequencer () { return seq; }
+public List<SoundbankItem> getSoundbankItems () { return banks; }
+public void open (Map<String,Object> params) {
+AudioFormat format = (AudioFormat)map.get("format");
+
+if (map.get("no line")==null) {
+int bufferSize = Integer.parseInt(params.get("buffer length").toString()) * (int)format.getSampleRate() * format.getSampleSizeInBits() * format.getChannels() / 8000;
+DataLine.Info info = new DataLine.Info(SourceDataLine.class, format, bufferSize);
+line = (SourceDataLine)AudioSystem.getLine(info);
+line.open();
+line.start();
+
+volume = (FloatControl)line.getControl(FloatControl.Type.MASTER_GAIN);
+}
+
+synth = new SoftSynthesizer();
+synth.open(line, paramMap);
+
+if (map.get("no sequencer")!=null) {
+seq = MidiSystem.getSequencer(false);
+seq.open();
+seq.getTransmitter().setReceiver(synth.getReceiver());
+}
+public void close () {
+if (seq!=null && seq.isOpen()) seq.close();
+if (synth!=null && synth.isOpen()) synth.close();
+if (line!=null && line.isOpen()) line.close();
+}
+
+
+}
+
+}

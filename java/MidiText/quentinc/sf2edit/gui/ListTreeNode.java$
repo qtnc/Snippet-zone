@@ -1,0 +1,49 @@
+ private static class ListTreeNode implements TreeNode {
+private java.util.List<Object> children = null;
+private TreeNode parent = null;
+private int index = 0;
+private Object o = null;
+private boolean allowchildren = false;
+
+public ListTreeNode () {}
+public void setParent (TreeNode n) { parent=n; }
+public void setIndex (int n) { index=n; }
+public void setValue (Object o) { this.o=o; }
+public Object getValue () { return o; }
+public void setAllowChildren (boolean b) { allowchildren=b; }
+public void remove (Object o) {
+if (children==null) return;
+children.remove(o);
+}
+public void add (Object o) {
+if (children==null) children = new ArrayList<Object>();
+children.add(o);
+}
+public boolean getAllowsChildren () { return allowchildren; }
+public TreeNode getParent () { return parent; }
+public int getIndex (TreeNode t) {
+if (children==null) return -1;
+if (t instanceof ListTreeNode) return children.indexOf(((ListTreeNode)t).getValue());
+else return children.indexOf(t);
+}
+public String toString () { return str; }
+public TreeNode getChildAt (int n) {
+if (children==null) return null;
+Object o = children.get(n);
+if (o instanceof TreeNode) return (TreeNode)o;
+else {
+ListTreeNode t = new ListTreeNode();
+t.setValue(o.toString());
+t.setParent(this);
+t.setIndex(n);
+return t;
+}}
+public int getChildCount () {
+return (children==null? 0 : children.size());
+}
+public boolean isLeaf () { return !getAllowsChildren(); }
+public Enumeration children () {
+return (children==null? null : Collections.enumeration(children));
+}
+}
+
