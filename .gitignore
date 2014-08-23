@@ -1,0 +1,15 @@
+*.exe
+*.dll
+*.o
+*.a
+*.lib
+*.tlb
+*.class
+*.zip
+*.mp3
+*.ogg
+*.wav
+*.log
+*.tmp
+*.dat
+out*.txt
