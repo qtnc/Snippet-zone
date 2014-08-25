@@ -1,0 +1,135 @@
+<!DOCTYPE HTML>
+<html><head>
+<title>Menu ARIA example</title>
+</head><body>
+<p><button type="button" id="menubtn" aria-haspopup="true">Click here to open the menu</button></p>
+<div id="menu" role="application">
+<ul role="menu">
+<li><a href="#">Item 1</a></li>
+<li><a href="#">Item 2</a>
+<ul>
+<li><a href="#">Item 2.1</a></li>
+<li><a href="#">Item 2.2</a></li>
+<li><a href="#">Item 2.3</a></li>
+</ul></li>
+<li><a href="#">Item 3</a></li>
+<li><a href="#">Item 4</a></li>
+<li><a href="#">Item 5</a></li>
+</ul>
+</div>
+
+<script type="text/javascript">
+
+function nextNode (node) {
+do {
+node = node.nextSibling;
+} while (node && node.nodeType==3);
+return node;
+}
+
+function prevNode (node) {
+do {
+node = node.previousSibling;
+} while (node && node.nodeType==3);
+return node;
+}
+
+function menu_init (menu, btn) {
+var links = menu.querySelectorAll('a');
+menu.items = links;
+for (var i=0; i<links.length; i++) {
+var a = links[i];
+a.setAttribute('tabindex', -1);
+a.onclick = menu_click;
+a.onkeydown = menu_keyDown;
+if (a.parentNode.querySelector('ul')) a.setAttribute('aria-haspopup', true);
+}
+menu.style.display='none';
+btn.onclick = menu_open.bind(menu);
+}
+
+function menu_keyDown (ev) {
+var e = ev || window.event;
+var k = e.keyCode || e.which;
+var ul = this.parentNode.parentNode;
+switch(k){
+case 38: // up arrow
+menu_focus.call(ul, -1);
+break;
+case 40: // down arrow
+menu_focus.call(ul, 1);
+break;
+case 39: // right arrow
+if (this.parentNode.querySelector('ul')) menu_click.call(this);
+break;
+case 37: // left arrow
+case 27: // escape
+menu_close.call(ul, false);
+break;
+default: return true;
+}
+if (e.preventDefault) e.preventDefault();
+if (e.stopPropagation) e.stopPropagation();
+return false;
+}
+
+function menu_close (recursive) {
+var m = this;
+if (m.parentNode.getAttribute('role')=='application') m=m.parentNode;
+m.style.display = 'none';
+this.curItem = null;
+if (this.parentNode && this.parentNode.parentNode && this.parentNode.parentNode.tagName.toUpperCase()=='UL') {
+if (recursive) menu_close.call(this.parentNode.parentNode, true);
+else menu_focus.call(this.parentNode.parentNode);
+}
+else {
+var e = window.lastFocusedElement;
+if(e) e.focus();
+}}
+
+function menu_click () {
+var subul = this.parentNode.querySelector('ul');
+if (subul) {
+subul.style.display='block';
+menu_focus.call(subul, 0);
+return false;
+}
+else {
+menu_close.call(this.parentNode.parentNode, true);
+return true;
+}}
+
+function menu_focus (count) {
+var item = this.curItem;
+if (!item) item = this.querySelector('a');
+while(count>0) {
+var nextItem = nextNode(item.parentNode);
+if (!nextItem) return;
+item = nextItem.firstChild;
+count--;
+}
+while(count<0) {
+var nextItem = prevNode(item.parentNode);
+if (!nextItem) return;
+item = nextItem.firstChild;
+count++;
+}
+if (this.curItem) this.curItem.setAttribute('tabindex', -1);
+this.curItem = item;
+item.setAttribute('tabindex', 0);
+item.focus();
+return false;
+}
+
+function menu_open () {
+this.style.display='block';
+window.lastFocusedElement = document.activeElement;
+menu_focus.call(this, 0);
+}
+
+window.onload = function(){
+menu_init(document.getElementById('menu'), document.getElementById('menubtn'));
+};
+
+</script>
+</body></html>

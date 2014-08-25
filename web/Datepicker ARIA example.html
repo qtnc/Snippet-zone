@@ -1,0 +1,197 @@
+<!DOCTYPE HTML>
+<html><head>
+<title>Datepicker ARIA example</title>
+</head><body>
+<form action="">
+<p><label for="birthdate">Date of birth: </label>
+<input aria-haspopup="true" type="text" id="birthdate" value="1984-11-19" min="1900-01-01" max="2099-12-31" /></p>
+</form>
+<script type="text/javascript">
+
+function datePicker_init (input) {
+var btn = document.createElement('button');
+btn.setAttribute('type', 'button');
+btn.onclick = datePicker_dropdown.bind(input);
+btn.innerHTML = '&darr;';
+input.onkeydown = datePicker_inputKeyDown;
+input.parentNode.appendChild(btn);
+}
+
+function datePicker_dropdown () {
+var self = this;
+var div = document.createElement('div');
+var form = document.createElement('form');
+var p = document.createElement('p');
+var comboMonth = document.createElement('select');
+var comboYear = document.createElement('select');
+var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+for (var i=0; i<12; i++) {
+var opt = document.createElement('option');
+opt.value = i;
+opt.appendChild(document.createTextNode(months[i]));
+comboMonth.appendChild(opt);
+}
+for (var i=1900; i<=2100; i++) {
+var opt = document.createElement('option');
+opt.value = i;
+opt.appendChild(document.createTextNode(i));
+comboYear.appendChild(opt);
+}
+var lbl = document.createElement('label');
+lbl.setAttribute('for', 'comboMonth');
+lbl.appendChild(document.createTextNode('Month: '));
+p.appendChild(lbl);
+p.appendChild(comboMonth);
+lbl = document.createElement('label');
+lbl.setAttribute('for', 'comboYear');
+lbl.appendChild(document.createTextNode('Year: '));
+p.appendChild(lbl);
+p.appendChild(comboYear);
+form.appendChild(p);
+div.appendChild(form);
+form.onsubmit = function(){ return false; };
+var cbChange = function(){ datePicker_fillMonth.call(self, new Date(Math.floor(comboYear.value), Math.floor(comboMonth.value), 1)); };
+comboMonth.onchange = cbChange;
+comboYear.onchange = cbChange;
+var table = document.createElement('table');
+var thead = document.createElement('thead');
+var tbody = document.createElement('tbody');
+var tr = document.createElement('tr');
+//table.setAttribute('role', 'grid');
+//tr.setAttribute('role', 'rowheader');
+var days = ['Monday', 'Tuesday', 'Wednesday', 'Thurstday', 'Friday', 'Saturday', 'Sunday'];
+for (var i=0; i<7; i++) {
+var th = document.createElement('th');
+th.setAttribute('scope', 'col');
+//th.setAttribute('role', 'gridcell');
+th.appendChild(document.createTextNode(days[i]));
+tr.appendChild(th);
+}
+thead.appendChild(tr);
+var tds = [];
+for (var i=0; i<6; i++) {
+tr = document.createElement('tr');
+//tr.setAttribute('role', 'row');
+for (var j=0; j<7; j++) {
+var td = document.createElement('td');
+td.setAttribute('role', 'gridcell');
+tr.appendChild(td);
+tds.push(td);
+}
+tbody.appendChild(tr);
+}
+table.appendChild(thead);
+table.appendChild(tbody);
+div.appendChild(table);
+div.setAttribute('role', 'application');
+this.parentNode.parentNode.insertBefore(div, this.parentNode.nextSibling);
+this.droppeddown=div;
+this.daycells = tds;
+this.comboMonth = comboMonth;
+this.comboYear = comboYear;
+var date = new Date(Date.parse(this.value));
+var day = date.getDate();
+datePicker_fillMonth.call(this, date);
+comboMonth.value = date.getMonth();
+comboYear.value = date.getFullYear();
+datePicker_focusDay.call(this, day -1, true);
+}
+
+function datePicker_inputKeyDown (ev) {
+var e = ev || window.event;
+var k = e.keyCode || e.which;
+if (k==40 || k==32) {
+datePicker_dropdown.apply(this);
+return false;
+}
+return true;
+}
+
+function datePicker_isLeapYear (n) {
+return n%4==0 && (n%100!=0 || n%400==0);
+}
+
+function datePicker_getNumberOfDaysInMonth (y, m) {
+if (m==1) return datePicker_isLeapYear(y)? 29 : 28;
+else if (m==3 || m==5 || m==8 || m==10) return 30;
+else return 31;
+}
+
+function datePicker_clickDay (y, m, d) {
+var s = 
+y + '-'
++ (m<10? '0':'') +m
++ '-'
++ (d<10? '0':'') +d;
+this.droppeddown.parentNode.removeChild(this.droppeddown);
+this.droppeddown = null;
+this.value = s;
+this.focus();
+this.select();
+return false;
+}
+
+function datePicker_calKeydown (ev) {
+var e = ev || window.event;
+var k = e.keyCode || e.which;
+switch(k){
+case 37: // left
+datePicker_focusDay.call(this, this.selectedDay -1, true);
+break;
+case 39: // right
+datePicker_focusDay.call(this, this.selectedDay +1, true);
+break;
+case 38: // up
+datePicker_focusDay.call(this, this.selectedDay -7, true);
+break;
+case 40: // down
+datePicker_focusDay.call(this, this.selectedDay +7, true);
+break;
+default: 
+if (k>20) alert(k);
+return true;
+}
+if (e.preventDefault) e.preventDefault();
+if (e.stopPropagation) e.stopPropagation();
+return false;
+}
+
+function datePicker_fillMonth (date) {
+var m = date.getMonth(), y = date.getFullYear();
+var firstOfMonth = new Date(y, m, 1);
+var nDays = datePicker_getNumberOfDaysInMonth(y,m);
+var startingDay = (firstOfMonth.getDay() +6)%7;
+var tds = this.daycells;
+for (var i=0; i<42; i++) tds[i].innerHTML='';
+for (var i=0; i<nDays; i++) {
+var td = tds[i+startingDay];
+var a = document.createElement('a');
+a.appendChild(document.createTextNode(i+1));
+a.href = '#';
+a.setAttribute('tabindex', i==0?0:-1);
+a.onkeydown = datePicker_calKeydown.bind(this);
+a.onclick = datePicker_clickDay.bind(this, y, m+1, i+1);
+td.appendChild(a);
+}
+this.dayOffset = startingDay;
+this.selectedDay = 0;
+}
+
+function datePicker_focusDay (day, callFocus) {
+if (day<0 || day>=this.daycells.length || this.daycells[day+this.dayOffset].firstChild==null) return false;
+if (this.selectedDay>=0) {
+var td = this.daycells[this.selectedDay + this.dayOffset];
+td.firstChild.setAttribute('tabindex', -1);
+}
+this.selectedDay = day;
+var td = this.daycells[this.selectedDay + this.dayOffset];
+td.firstChild.setAttribute('tabindex', 0);
+if (callFocus) td.firstChild.focus();
+}
+
+window.onload = function(){
+datePicker_init(document.getElementById('birthdate'));
+};
+
+</script>
+</body></html>
