@@ -2,34 +2,44 @@
 ; Corrige automatiquement les fautes de frappe les plus courantes en français et en anglais, avec un bonus pour les programmeurs
 
 ; Français
+:*:ajotue::ajoute
+:*:alros::alors
 ::attendnat::attendant
 :C:AVec::Avec
-::ce'st::c'est
+:*:ba^ti::bâti
+:*:ce'st::c'est
 ::concernnat::concernant
 :C*:çA::ça
 ::4a::ça
 :C:Ca::Ça
 ::dnas::dans
 :C:DAns::Dans
-:C:ELle::Elle
-::elel::elle
-::elels::elles
+:C*:ELle::Elle
+:*:elel::elle
+:*:élémetn::élément
 ::e^tre::être
+:*:fa4on::façon
 :C:IL::Il
 :C:ILs::Ils
 ::ja'i::j'ai
 :C:LA::La
 :C:LE::Le
 :C:LEs::Les
-::lesquelels ::lesquelles
-::maintenatn::maintenant
-::maintennat::maintenant
-::aps::pas
-::réposne::réponse
+:*:lesquelels ::lesquelles
+:*:maintenatn::maintenant
+:*:maintennat::maintenant
+:*:ne'st::n'est
+:*:nouvelel::nouvelle
+:C*:NOn::Non
+:C:oÛ::où
+:C*:OUi::Oui
+:*:aps::pas
+:*:réposne::réponse
 :*?:séleciton::sélection
-::su^r::sûr
+:*:su^r::sûr
 :*:télécahrg::télécharg
-:*:utilsiateur::utilisateur
+:*:totu::tout
+:*:utilsi::utilis
 
 ;Anglais
 ::lsit::list
@@ -37,6 +47,7 @@
 ::optiosn::options
 ::taht::that
 ::tihs::this
+:*:langauge::language
 
 ;Spécial programmeurs
 :*?:-<::->
