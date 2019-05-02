@@ -6,12 +6,14 @@
 *.tlb
 *.class
 *.zip
+*.chm
 *.mp3
 *.ogg
 *.wav
 *.log
 *.tmp
 *.dat
+*.k
 out*.txt
 *test*
 *Test*

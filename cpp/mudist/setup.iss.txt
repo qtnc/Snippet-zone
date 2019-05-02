@@ -1,0 +1,88 @@
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+
+[CustomMessages]
+en.LocalAppName=QuentinC's Gameroom
+fr.LocalAppName=Le Salon
+es.LocalAppName=la Sala de juegos
+it.LocalAppName=Il Salotto
+pt.LocalAppName=Playroom
+de.LocalAppName=QuentinC's Spielsaal
+en.LocalDefaultDirName=QuentinCGameroom
+fr.LocalDefaultDirName=QuentinCSalon
+es.LocalDefaultDirName=QuentinCSala
+it.LocalDefaultDirName=QuentinCSalotto
+pt.LocalDefaultDirName=QuentinCGameroom
+de.LocalDefaultDirName=QuentinCSpielsaal
+en.ExploreParams=Explore parameters
+fr.ExploreParams=Explorer les paramètres
+es.ExploreParams=Explore parameters
+it.ExploreParams=esplorare i parametri
+pt.ExploreParams=Abrir a pasta de configurações
+de.ExploreParams=Parametern durchgehen
+
+[Setup]
+; Original: AppId={{E6B70CC6-75C7-4ABD-8469-379596F2B9BE}}
+; Testing: AppId={{FE13C26D-1776-4952-9362-99366CA35524}}
+AppId={{E6B70CC6-75C7-4ABD-8469-379596F2B9BE}}
+AppName={cm:LocalAppName}
+AppVersion=2.2.5
+AppPublisher=QuentinC
+AppCopyright=Copyright © 2010-2014 QuentinC http://qcsalon.net/
+AppPublisherURL=http://qcsalon.net/
+AppSupportURL=http://qcsalon.net/
+AppUpdatesURL=http://qcsalon.net/
+VersionInfoProductName={cm:LocalAppName}
+VersionInfoDescription={cm:LocalAppName}
+DefaultDirName={pf}\{cm:LocalDefaultDirName}
+DefaultGroupName={cm:LocalAppName}
+AllowNoIcons=yes
+ShowLanguageDialog=Yes
+RestartIfNeededByRun=No
+LicenseFile=C:\MinGW\ProgQ\SalonClient\license.txt
+OutputDir=C:\MinGW\ProgQ\SalonClient\
+OutputBaseFilename=quentinc-gameroom-2.2.5-multilingual-setup
+Compression=lzma
+SolidCompression=yes
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+Source: "C:\MinGW\ProgQ\SalonClient\jfwapi.dll"; DestDir: "{app}"; Flags: ignoreversion regserver noregerror
+Source: "C:\MinGW\ProgQ\SalonClient\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\MinGW\ProgQ\SalonClient\*.lng"; DestDir: "{userappdata}\QCGC\"; Flags: ignoreversion
+Source: "C:\MinGW\ProgQ\SalonClient\*.lng"; DestDir: "{app}\"; Flags: ignoreversion
+Source: "C:\MinGW\ProgQ\SalonClient\qcgc.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+Source: "C:\MinGW\ProgQ\SalonClient\qcgc21.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+Source: "C:\MinGW\ProgQ\SalonClient\salon.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+Source: "C:\MinGW\ProgQ\SalonClient\playroom.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+Source: "C:\MinGW\ProgQ\SalonClient\bassmidi.dlb"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\MinGW\ProgQ\SalonClient\readme.txt"; DestDir: "{app}"; languages: en; Flags: ignoreversion isreadme
+Source: "C:\MinGW\ProgQ\SalonClient\lisezmoi.txt"; DestDir: "{app}"; Languages: fr; Flags: ignoreversion isreadme
+Source: "C:\MinGW\ProgQ\SalonClient\license.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\MinGW\ProgQ\SalonClient\sounds\*.ogg"; DestDir: "{userappdata}\QCGC\sounds\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\MinGW\ProgQ\SalonClient\sounds\*.ogg"; DestDir: "{app}\sounds\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\MinGW\ProgQ\SalonClient\images\*.gfx"; DestDir: "{app}\images\"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+;old! type: files; name: "{userappdata}\QCGC\config.ini"
+type: files; name: "{userappdata}\QCGC\sounds\*.ogg"
+type: files; name: "{app}\sounds\*.ogg"
+type: files; name: "{commondesktop}\{cm:LocalAppName}.lnk"
+
+[Icons]
+Name: "{group}\{cm:LocalAppName}"; Filename: "{app}\qcgc.exe"
+Name: "{group}\{cm:ProgramOnTheWeb,{cm:LocalAppName}}"; Filename: "http://qcsalon.net/"
+Name: "{group}\{cm:UninstallProgram,{cm:LocalAppName}}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:ExploreParams}"; Filename: "{userappdata}\QCGC\"
+Name: "{commondesktop}\{cm:LocalAppName}"; Filename: "{app}\qcgc.exe"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\qcgc.exe"; Description: "{cm:LaunchProgram,{cm:LocalAppName}}"; Flags: nowait postinstall runasoriginaluser
+
