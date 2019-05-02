@@ -277,13 +277,13 @@ if (!incps && !outcps && !outfn) {
 if (incp==0) incp = GetACP();
 char cps[64]={0};
 enc2str(incp, cps, 63);
-printf("Guessed encoding for %s: %s\r\n", infn, cps);
+printf("Guessed encoding for %s: %s (%d)\r\n", infn, cps, incp);
 return 0;
 }
 
 wchar_t* wcs = NULL;
 buflen = pos;
-if (incp<-1) buflen/=2;
+if (incp<-1 || incp==65020 || incp==65021 || incp==65010 || incp==65011) buflen/=2;
 if (incp==65020 || incp==65021) unicodeSwitchEndianess(buf, buflen);
 if (incp==65010 || incp==65020) wcs = buf;
 else if (incp==65011 || incp==65021) wcs = buf+2;
@@ -298,6 +298,7 @@ if (outcp<0) {
 fprintf(stderr, "Unknown, unspecified or unsupported output encoding: %s\r\n", outcps);
 return 1;
 }
+if (incp==outcp) return 0;
 if (outcp==65011 || outcp==65021) {
 wcs = realloc(wcs, sizeof(wchar_t)*(buflen+2));
 memmove(wcs+1, wcs, sizeof(wchar_t)*buflen);
